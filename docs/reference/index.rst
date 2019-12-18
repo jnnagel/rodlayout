@@ -5,6 +5,7 @@ Reference
     :glob:
 
     transform
+    handle
     layer
     proxy
     canvas

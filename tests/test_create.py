@@ -5,6 +5,7 @@ from geometry import Rect, Segment, Point, Group
 from skillbridge import Workspace, current_workspace
 
 from rodlayout import Canvas, Layer
+from rodlayout.handle import Handle
 from rodlayout.proxy import DbShape
 
 
@@ -188,3 +189,22 @@ def test_delete_works(ws, canvas, cleanup):
     assert not db.db.figs
     assert not rect_db.valid
     assert db.valid
+
+
+def test_align(ws, canvas, cleanup):
+    one = Rect[0:2, 0:4, Layer('M1', 'drawing')]
+    two = Rect[0:2, 0:4, Layer('M1', 'drawing')]
+    three = Rect[2:4, 4:8, Layer('M1', 'drawing')]
+    canvas.append(one)
+    canvas.append(two)
+    canvas.append(three)
+    s = canvas.draw()
+
+    fc1 = s[0].align(Handle.CENTER_LEFT, s[1], Handle.CENTER_RIGHT)
+    fc2 = fc1.align(Handle.UPPER_LEFT, s[2], Handle.LOWER_LEFT)
+
+    assert s[0].b_box == [[4.0, 0.0], [6.0, 4.0]]
+    assert s[1].b_box == [[2.0, 0.0], [4.0, 4.0]]
+    assert s[2].b_box == [[2.0, 4.0], [4.0, 8.0]]
+    assert fc1.b_box == [[2.0, 0.0], [6.0, 4.0]]
+    assert fc2.b_box == [[2.0, 0.0], [6.0, 8.0]]
