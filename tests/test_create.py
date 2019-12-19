@@ -65,7 +65,7 @@ def layer_of(remote):
 def to_rect(r):
     if isinstance(r, Rect):
         return r
-    (l, b), (right, t) = (r.b_box or r.db_id.b_box)
+    (l, b), (right, t) = r.b_box or r.db_id.b_box
 
     return Rect.from_edges(l, right, b, t, layer_of(r))
 
@@ -125,7 +125,7 @@ def test_create_rect(ws, canvas, cleanup):
     r = Rect[0:0.1, 0.2:0.3, layer]
 
     canvas.append(r)
-    rod, = canvas.draw()
+    (rod,) = canvas.draw()
 
     assert rod.valid
     assert rect_equal(r, rod.db)
@@ -135,7 +135,7 @@ def test_create_segment(ws, canvas, cleanup):
     layer = Layer('M2', 'pin')
     s = Segment.from_start_end(Point(0, 1), Point(10, 1), 2, layer)
     canvas.append(s)
-    rod, = canvas.draw()
+    (rod,) = canvas.draw()
 
     assert rod.valid
     assert segment_equal(s, rod.db)
@@ -147,7 +147,7 @@ def test_create_group(ws, canvas, cleanup):
     g = Group([r, s])
 
     canvas.append(g)
-    db, = canvas.draw()
+    (db,) = canvas.draw()
 
     assert db.valid
     assert rect_equal(g.bbox, db.db)
@@ -167,7 +167,7 @@ def test_create_nested_group(ws, canvas, cleanup):
     group_two = Group([group_one, three])
 
     canvas.append(group_two)
-    db, = canvas.draw()
+    (db,) = canvas.draw()
 
     assert rect_equal(group_two.bbox, db.db)
     assert rect_equal(db.db.figs[1], three)
@@ -180,7 +180,7 @@ def test_delete_works(ws, canvas, cleanup):
     group = Group([one])
 
     canvas.append(group)
-    db, = canvas.draw()
+    (db,) = canvas.draw()
 
     rect_db = DbShape(db.db.figs[0])
 
