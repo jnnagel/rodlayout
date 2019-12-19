@@ -1,6 +1,7 @@
 from warnings import warn, simplefilter
 
-from pytest import fixture, raises
+from os import getenv
+from pytest import fixture, raises, mark
 from geometry import Rect, Segment, Point, Group
 from skillbridge import Workspace, current_workspace
 
@@ -19,6 +20,7 @@ def canvas():
     return Canvas(current_workspace.ge.get_edit_cell_view())
 
 
+pytestmark = mark.skipif(getenv("VIRTUOSO") is None, reason="no virtuoso tests")
 saved_shapes = []
 
 
