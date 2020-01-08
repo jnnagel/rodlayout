@@ -13,3 +13,6 @@ Proxies
 
 .. autoclass:: rodlayout.proxy.RodShape
     :members:
+
+.. autoclass:: rodlayout.proxy.Instance
+    :members:

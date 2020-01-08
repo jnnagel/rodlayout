@@ -1,16 +1,91 @@
+import operator
 from contextlib import contextmanager
 from typing import Generator, cast, List, Iterable
 from dataclasses import dataclass
 
+from geometry.point import TuplePoint
 from skillbridge import current_workspace
-from skillbridge.client.hints import SkillTuple, Number
+from skillbridge.client.hints import SkillTuple
 from skillbridge.client.objects import RemoteObject
 
 from geometry import Point
 
-from rodlayout.handle import Handle
 from rodlayout.hints import BoundingBox
+from .handle import python_skill_handle
 from .transform import Transform
+
+TupleVector = TuplePoint
+
+
+@dataclass(frozen=True)
+class _AlignHandle:
+    _shape: 'Figure'
+    _pr: bool
+    _handle: str
+
+    def __getattr__(self, handle: str) -> '_AlignHandle':
+        return _AlignHandle(self._shape, self._pr, python_skill_handle[handle])
+
+    def align(
+        self, sep: TupleVector = (0, 0), maintain: bool = False, **handle: '_AlignHandle'
+    ) -> 'FigureCollection':
+        assert len(handle) == 1, "Exactly 1 align handle expected."
+        key, ref = handle.popitem()
+        assert ref._handle, "Need a handle name for the reference object."
+        try:
+            align_handle = python_skill_handle[key]
+        except KeyError:
+            raise ValueError(f"There is no handle named {key!r}.") from None
+        return self._do_align(align_handle=align_handle, ref=ref, sep=sep, maintain=maintain)
+
+    def _do_align(
+        self, align_handle: str, ref: '_AlignHandle', sep: TupleVector, maintain: bool
+    ) -> 'FigureCollection':
+        cell_view = self._shape.cell_view
+        with ghost_shape(cell_view, self._shape, self._pr) as align_rod:
+            with ghost_shape(cell_view, ref._shape, ref._pr) as ref_rod:
+                current_workspace.rod.align(
+                    align_obj=align_rod,
+                    align_handle=align_handle,
+                    ref_obj=ref_rod,
+                    ref_handle=ref._handle,
+                    maintain=False,
+                    x_sep=sep[0],
+                    y_sep=sep[1],
+                )
+        return FigureCollection([self._shape, ref._shape], cell_view)
+
+
+@dataclass(frozen=True)
+class _RodAlignHandle(_AlignHandle):
+    def _do_align(
+        self, align_handle: str, ref: '_AlignHandle', sep: TupleVector, maintain: bool
+    ) -> 'FigureCollection':
+        if maintain and not isinstance(ref._shape, RodShape):
+            raise ValueError(
+                "Cannot maintain alignment when ref objects has no rod representation."
+            )
+        if maintain and (self._pr or ref._pr):
+            raise ValueError("Cannot maintain alignment for pr boundary.")
+
+        if (
+            not isinstance(ref._shape, RodShape)
+            or not isinstance(self._shape, RodShape)
+            or self._pr
+            or ref._pr
+        ):
+            return super()._do_align(align_handle, ref, sep, maintain)
+
+        current_workspace.rod.align(
+            align_obj=self._shape.rod,
+            align_handle=align_handle,
+            ref_obj=ref._shape.rod,
+            ref_handle=ref._handle,
+            maintain=maintain,
+            x_sep=sep[0],
+            y_sep=sep[1],
+        )
+        return FigureCollection([self._shape, ref._shape], self._shape.cell_view)
 
 
 class Figure:
@@ -28,43 +103,24 @@ class Figure:
         """
         raise NotImplementedError
 
-    def align(
-        self,
-        align_handle: Handle,
-        ref_shape: 'Figure',
-        ref_handle: Handle,
-        x_sep: Number = 0,
-        y_sep: Number = 0,
-    ) -> 'FigureCollection':
-        """
-        Aligns this figure by ``align_handle`` to ``ref_handle`` on the ``ref_shape``.
-
-        :param align_handle: ``Handle`` to align this shape by.
-        :param ref_shape: Calling shape is aligned to the ref shape.
-        :param ref_handle: ``Handle`` to align the reference shape by.
-        :param x_sep: Separation in x direction.
-        :param y_sep: Separation in y direction.
-        :return: ``FigureCollection`` containing the align & ref shapes.
-        """
-        cell_view = self.cell_view
-        with ghost_shape(cell_view, self) as align_rod:
-            with ghost_shape(cell_view, ref_shape) as ref_rod:
-                current_workspace.rod.align(
-                    align_obj=align_rod,
-                    align_handle=align_handle.value,
-                    ref_obj=ref_rod,
-                    ref_handle=ref_handle.value,
-                    maintain=False,
-                    x_sep=x_sep,
-                    y_sep=y_sep,
-                )
-
-        return FigureCollection(cell_view, [self, ref_shape])
+    def __getattr__(self, handle: str) -> _AlignHandle:
+        return _AlignHandle(self, False, python_skill_handle[handle])
 
     @property
-    def b_box(self) -> BoundingBox:
+    def b_box(self) -> _AlignHandle:
+        return _AlignHandle(self, False, '')
+
+    @property
+    def skill_b_box(self) -> BoundingBox:
         """
         :return: Bounding box for this figure.
+        """
+        raise NotImplementedError
+
+    @property
+    def skill_pr_boundary(self) -> BoundingBox:
+        """
+
         """
         raise NotImplementedError
 
@@ -87,15 +143,19 @@ class FigureCollection(Figure):
     which is not natively supported by skill.
     """
 
-    _cell_view: RemoteObject
+    @property
+    def skill_pr_boundary(self) -> BoundingBox:
+        raise NotImplementedError("Figure collection does not have a pr boundary.")
+
     elements: List[Figure]
+    _cell_view: RemoteObject
 
     @property
     def cell_view(self) -> RemoteObject:
         return self._cell_view
 
     @property
-    def b_box(self) -> BoundingBox:
+    def skill_b_box(self) -> BoundingBox:
         """
         :return: Bounding box drawn by all instances contained in this group.
                  Determined by b_box value of figure group.
@@ -127,6 +187,14 @@ class DbShape(Figure):
     """
 
     db: RemoteObject
+
+    @property
+    def skill_b_box(self) -> BoundingBox:
+        return cast(BoundingBox, self.db.b_box)
+
+    @property
+    def skill_pr_boundary(self) -> BoundingBox:
+        raise NotImplementedError("Db Shape does not have a pr boundary.")
 
     @property
     def cell_view(self) -> RemoteObject:
@@ -194,13 +262,6 @@ class DbShape(Figure):
                 rod = current_workspace.rod.get_obj(fig)
                 yield RodShape.from_rod(cast(RemoteObject, rod))
 
-    @property
-    def b_box(self) -> BoundingBox:
-        """
-        :return: Instance boundary bounding box.
-        """
-        return cast(BoundingBox, self.db.b_box)
-
     def get_db_ids(self) -> List[RemoteObject]:
         """
         :return: Database id for this shape.
@@ -219,6 +280,17 @@ class RodShape(DbShape):
 
     # db: RemoteObject
     rod: RemoteObject
+
+    def __getattr__(self, handle: str) -> _RodAlignHandle:
+        return _RodAlignHandle(self, False, python_skill_handle[handle])
+
+    @property
+    def skill_pr_boundary(self) -> BoundingBox:
+        raise NotImplementedError("Rod Shape has no pr boundary.")
+
+    @property
+    def b_box(self) -> _RodAlignHandle:
+        return _RodAlignHandle(self, False, '')
 
     @classmethod
     def from_rod(cls, rod: RemoteObject) -> 'RodShape':
@@ -239,22 +311,61 @@ class RodShape(DbShape):
         return RodShape(db, cast(RemoteObject, rod))
 
 
+@dataclass(frozen=True)
+class Instance(RodShape):
+    """
+    A proxy to an existing instance.
+    """
+
+    @classmethod
+    def from_name(cls, cell_view: RemoteObject, name: str) -> 'Instance':
+        db = cast(RemoteObject, current_workspace.db.find_any_inst_by_name(cell_view, name))
+        assert db is not None
+        rod = cast(RemoteObject, current_workspace.rod.get_obj(db))
+        assert rod is not None
+
+        return Instance(db, rod)
+
+    @property
+    def pr_boundary(self) -> _AlignHandle:
+        return _AlignHandle(self, True, '')
+
+    @property
+    def skill_pr_boundary(self) -> BoundingBox:
+        cv_rel_pr_box = self.db.master.pr_boundary.b_box
+
+        inst_rel_pr_box = [
+            list(map(operator.sub, p, self.db.master.b_box[0])) for p in cv_rel_pr_box
+        ]
+        abs_pr_box = [list(map(operator.add, p, self.db.b_box[0])) for p in inst_rel_pr_box]
+
+        return cast(BoundingBox, abs_pr_box)
+
+    def get_db_ids(self) -> List[RemoteObject]:
+        return [self.db]
+
+
 @contextmanager
-def ghost_shape(cell_view: RemoteObject, shape: Figure) -> Generator[RemoteObject, None, None]:
+def ghost_shape(
+    cell_view: RemoteObject, figure: Figure, pr: bool
+) -> Generator[RemoteObject, None, None]:
     """
     Allows for any ``Figure`` to be handled like a rod object.
     All instances are grouped along with a new rod shape, specified by the figure bounding box.
     The figure may than be aligned on this rod shape.
     """
-    b_box = cast(SkillTuple, shape.b_box)
+    b_box = figure.skill_pr_boundary if pr else figure.skill_b_box
     rod_shape = cast(
-        RemoteObject, current_workspace.rod.create_rect(layer="M1", cv_id=cell_view, b_box=b_box)
+        RemoteObject,
+        current_workspace.rod.create_rect(
+            layer="M1", cv_id=cell_view, b_box=cast(SkillTuple, b_box)
+        ),
     )
     group_id = current_workspace.db.create_fig_group(
         cell_view, None, False, cast(SkillTuple, (0, 0)), Transform.identity.value
     )
     current_workspace.db.add_fig_to_fig_group(group_id, rod_shape.db_id)
-    for inst_id in shape.get_db_ids():
+    for inst_id in figure.get_db_ids():
         current_workspace.db.add_fig_to_fig_group(group_id, inst_id)
 
     try:

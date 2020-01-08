@@ -202,11 +202,11 @@ def test_align(ws, canvas, cleanup):
     canvas.append(three)
     s = canvas.draw()
 
-    fc1 = s[0].align(Handle.CENTER_LEFT, s[1], Handle.CENTER_RIGHT)
-    fc2 = fc1.align(Handle.UPPER_LEFT, s[2], Handle.LOWER_LEFT)
+    fc1 = s[0].b_box.align(center_left=s[1].b_box.center_right)
+    fc2 = fc1.b_box.align(upper_left=s[2].b_box.lower_left)
 
-    assert s[0].b_box == [[4.0, 0.0], [6.0, 4.0]]
-    assert s[1].b_box == [[2.0, 0.0], [4.0, 4.0]]
-    assert s[2].b_box == [[2.0, 4.0], [4.0, 8.0]]
-    assert fc1.b_box == [[2.0, 0.0], [6.0, 4.0]]
-    assert fc2.b_box == [[2.0, 0.0], [6.0, 8.0]]
+    assert s[0].skill_b_box == [[4.0, 0.0], [6.0, 4.0]]
+    assert s[1].skill_b_box == [[2.0, 0.0], [4.0, 4.0]]
+    assert s[2].skill_b_box == [[2.0, 4.0], [4.0, 8.0]]
+    assert fc1.skill_b_box == [[2.0, 0.0], [6.0, 4.0]]
+    assert fc2.skill_b_box == [[2.0, 0.0], [6.0, 8.0]]

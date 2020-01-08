@@ -1,16 +1,18 @@
-from enum import Enum
+_handle_part_y = [
+    ('top', 'upper'),
+    ('upper', 'upper'),
+    ('bottom', 'lower'),
+    ('lower', 'lower'),
+    ('center', 'center'),
+]
+_handle_part_x = ['left', 'center', 'right']
 
+python_skill_handle = {
+    f'{py}_{x}': f'{sy}{x.title()}' for py, sy in _handle_part_y for x in _handle_part_x
+}
 
-class Handle(Enum):
-    """
-    Represents the skill alignHandle strings.
-    """
+for x in _handle_part_x:
+    python_skill_handle[x] = 'center' + x.title()
 
-    UPPER_LEFT = 'upperLeft'
-    UPPER_CENTER = 'upperCenter'
-    UPPER_RIGHT = 'upperRight'
-    CENTER_RIGHT = 'centerRight'
-    LOWER_RIGHT = 'lowerRight'
-    LOWER_CENTER = 'lowerCenter'
-    LOWER_LEFT = 'lowerLeft'
-    CENTER_LEFT = 'centerLeft'
+for py, sy in _handle_part_y:
+    python_skill_handle[py] = sy + 'Center'
