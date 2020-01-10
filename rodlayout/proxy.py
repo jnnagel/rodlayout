@@ -8,7 +8,8 @@ from skillbridge import current_workspace
 from skillbridge.client.hints import SkillTuple
 from skillbridge.client.objects import RemoteObject
 
-from geometry import Point
+from geometry import Point, Number, Rect
+from geometry.translate import CanTranslate
 
 from rodlayout.hints import BoundingBox
 from .handle import python_skill_handle
@@ -179,8 +180,8 @@ class FigureCollection(Figure):
             yield from element.get_db_ids()
 
 
-@dataclass(frozen=True)
-class DbShape(Figure):
+@dataclass
+class DbShape(Figure, CanTranslate):
     """
     A proxy to an existing shape in Virtuoso.
 
@@ -207,6 +208,15 @@ class DbShape(Figure):
 
     def __repr__(self) -> str:
         return self.__str__()
+
+    def move(self, offset: Point) -> None:
+        """
+        Move the db object relative by a given offset
+
+        This actually moves the object in virtuoso
+        """
+        transform = cast(SkillTuple, (offset, Transform.identity.value))
+        current_workspace.db.move_fig(self.db, self.db.cell_view, transform)
 
     def delete(self, children: bool = True, redraw: bool = False) -> None:
         """
@@ -264,6 +274,71 @@ class DbShape(Figure):
                 rod = current_workspace.rod.get_obj(fig)
                 yield RodShape.from_rod(cast(RemoteObject, rod))
 
+    @property
+    def _bbox(self) -> Rect:
+        (left, bottom), (right, top) = self.db.b_box
+        return Rect.from_edges(left, right, bottom, top)
+
+    @property
+    def xy(self) -> Point:
+        """
+        The center of the bounding box of the db object
+
+        Assigning the property will translate the object
+        such that the new center of its bounding box is at the
+        given point
+        """
+        return self._bbox.xy  # type: ignore
+
+    @xy.setter
+    def xy(self, new_point: Point) -> None:
+        offset = new_point - self.xy
+        self.move(offset)
+
+    @property  # type: ignore
+    def x(self) -> Number:  # type: ignore
+        """
+        The x coordinate of the center of the bounding box of the db object
+
+        Assigning the property will translate the object horizontally
+        such that the new x coordinate and the given x coordinate match
+        """
+        return self._bbox.x
+
+    @x.setter
+    def x(self, new_x: Number) -> None:
+        offset = Point(new_x - self.x, 0)
+        self.move(offset)
+
+    @property  # type: ignore
+    def y(self) -> Number:  # type: ignore
+        """
+        The y coordinate of the center of the bounding box of the db object
+
+        Assigning the property will translate the object vertically
+        such that the new y coordinate and the given y coordinate match
+        """
+        return self._bbox.y
+
+    @y.setter
+    def y(self, new_y: Number) -> None:
+        offset = Point(0, new_y - self.y)
+        self.move(offset)
+
+    @property
+    def width(self) -> Number:  # type: ignore
+        """
+        The width of the bounding box of the db object
+        """
+        return self._bbox.width
+
+    @property
+    def height(self) -> Number:  # type: ignore
+        """
+        The height of the bounding box of the db object
+        """
+        return self._bbox.height
+
     def get_db_ids(self) -> List[RemoteObject]:
         """
         :return: Database id for this shape.
@@ -271,7 +346,7 @@ class DbShape(Figure):
         return [self.db]
 
 
-@dataclass(frozen=True)
+@dataclass
 class RodShape(DbShape):
     """
     A proxy to an existing shape in Virtuoso with a rod object.
@@ -313,7 +388,7 @@ class RodShape(DbShape):
         return RodShape(db, cast(RemoteObject, rod))
 
 
-@dataclass(frozen=True)
+@dataclass
 class Instance(RodShape):
     """
     A proxy to an existing instance.
