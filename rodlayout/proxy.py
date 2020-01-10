@@ -146,10 +146,6 @@ class FigureCollection(Figure):
     which is not natively supported by skill.
     """
 
-    @property
-    def skill_pr_boundary(self) -> BoundingBox:
-        raise NotImplementedError("Figure collection does not have a pr boundary.")
-
     elements: List[Figure]
     _cell_view: RemoteObject
 
@@ -171,6 +167,10 @@ class FigureCollection(Figure):
         b_box = cast(RemoteObject, group_id).b_box
         current_workspace.db.delete_object(group_id)
         return cast(BoundingBox, b_box)
+
+    @property
+    def skill_pr_boundary(self) -> BoundingBox:
+        raise NotImplementedError("Figure collection does not have a pr boundary.")
 
     def get_db_ids(self) -> Generator[RemoteObject, None, None]:
         """
