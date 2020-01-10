@@ -1,18 +1,51 @@
+from contextlib import contextmanager
+from os import getenv
+from typing import cast
 from warnings import warn, simplefilter
 
-from os import getenv
-from pytest import fixture, raises, mark
+import pytest
+from attr import dataclass
 from geometry import Rect, Segment, Point, Group
+from pytest import fixture, raises, mark
 from skillbridge import Workspace, current_workspace
+from skillbridge.client.objects import RemoteObject
 
 from rodlayout import Canvas, Layer
-from rodlayout.handle import Handle
-from rodlayout.proxy import DbShape
+from rodlayout.handle import python_skill_handle
+from rodlayout.hints import BoundingBox
+from rodlayout.proxy import DbShape, Instance, RodShape, Figure
+
+'''
+This test package is skipped by default, unless env VIRTUOSO is set.
+
+This test package requires a connected virtuoso instance. Furthermore:
+A library named rodlayout_test with cells:
+test_cell:
+- Contains a P&R boundary constructed of points (-1 -3) (-1 5) (7 5) (7 -3).
+- A rectangle; Left: 0; Bottom: 0; Right: 11; Top: 7.
+test_layout:
+- Should be opened (current cell view) and empty.
+'''
 
 
 @fixture
 def ws():
     return Workspace.open().make_current()
+
+
+@fixture
+def cv():
+    cv = current_workspace.db.open_cell_view_by_type(
+        "rodlayout_test", "test_layout", "layout", "", "a"
+    )
+    return cv
+
+
+@fixture
+def cell_cv():
+    return current_workspace.db.open_cell_view_by_type(
+        "rodlayout_test", "test_cell", "layout", "", "a"
+    )
 
 
 @fixture
@@ -193,20 +226,115 @@ def test_delete_works(ws, canvas, cleanup):
     assert db.valid
 
 
-def test_align(ws, canvas, cleanup):
-    one = Rect[0:2, 0:4, Layer('M1', 'drawing')]
-    two = Rect[0:2, 0:4, Layer('M1', 'drawing')]
-    three = Rect[2:4, 4:8, Layer('M1', 'drawing')]
-    canvas.append(one)
-    canvas.append(two)
-    canvas.append(three)
-    s = canvas.draw()
+def test_align(ws, cv, cell_cv):
+    """
+    Crosses all alignable objects inheriting from
+    figure with PR alignment for instances, align handles and maintain flag for the align method.
+    """
+    dummy_layer = Layer("M1", "drawing")
 
-    fc1 = s[0].b_box.align(center_left=s[1].b_box.center_right)
-    fc2 = fc1.b_box.align(upper_left=s[2].b_box.lower_left)
+    @dataclass
+    class Alignable:
+        shape: Figure
+        align_at: str
+        rect: Rect
 
-    assert s[0].skill_b_box == [[4.0, 0.0], [6.0, 4.0]]
-    assert s[1].skill_b_box == [[2.0, 0.0], [4.0, 4.0]]
-    assert s[2].skill_b_box == [[2.0, 4.0], [4.0, 8.0]]
-    assert fc1.skill_b_box == [[2.0, 0.0], [6.0, 4.0]]
-    assert fc2.skill_b_box == [[2.0, 0.0], [6.0, 8.0]]
+        @property
+        def align(self):
+            if self.align_at == "b_box":
+                return self.shape.b_box
+            elif self.align_at == "pr_boundary":
+                return self.shape.pr_boundary
+
+        @property
+        def b_box(self) -> BoundingBox:
+            if self.align_at == "b_box":
+                return self.shape.skill_b_box
+            elif self.align_at == "pr_boundary":
+                return self.shape.skill_pr_boundary
+
+    count = 0
+
+    @contextmanager
+    def create_inst():
+        nonlocal count, ws, cv, cell_cv
+        name = f"I{count}_test"
+        db = ws.db.create_inst(cv, cell_cv, name, (0, 0), "R0")
+        count += 1
+        try:
+            shape = Instance.from_name(cv, name)
+            yield Alignable(shape=shape, align_at="b_box", rect=Rect[-1:11, -3:7])
+        finally:
+            ws.db.delete_object(db)
+
+    @contextmanager
+    def create_pr_inst():
+        # Instance to be aligned at the P&R boundary
+        with create_inst() as inst:
+            yield Alignable(shape=inst.shape, align_at="pr_boundary", rect=Rect[-1:7, -3:5])
+
+    @contextmanager
+    def create_inst_group():
+        with create_inst() as i1:
+            with create_inst() as i2:
+                shape = i1.shape.b_box.align(center_left=i2.shape.b_box.center_right)
+                b_box = shape.skill_b_box
+                yield Alignable(
+                    shape=shape,
+                    align_at="b_box",
+                    rect=Rect[b_box[0][0] : b_box[1][0], b_box[0][1] : b_box[1][1]],
+                )
+
+    @contextmanager
+    def create_db_shape():
+        nonlocal cv
+        canvas = Canvas(cv)
+        rect = Rect[0:1, 3:7, dummy_layer]
+        group = Group([rect])
+        canvas.append(group)
+        (db,) = canvas.draw()
+
+        rect_db = DbShape(db.db)
+
+        yield Alignable(shape=rect_db, align_at="b_box", rect=rect)
+        rect_db.delete()
+
+    @contextmanager
+    def create_rod_shape():
+        nonlocal ws, cv
+        b_box = ((-3, -5), (13, 17))
+        rod = ws.rod.create_rect(cv_id=cv, layer=dummy_layer, b_box=b_box)
+        shape = RodShape.from_rod(cast(RemoteObject, rod))
+        yield Alignable(
+            shape=shape,
+            align_at="b_box",
+            rect=Rect[b_box[0][0] : b_box[1][0], b_box[0][1] : b_box[1][1]],
+        )
+        shape.delete()
+
+    # Align for bounding box
+    handles = python_skill_handle
+    shapes = (create_inst, create_pr_inst, create_inst_group, create_db_shape, create_rod_shape)
+    for maintain in (True, False):
+        for handle1, handle2 in ((x, y) for x in handles for y in handles):
+            for create_s1, create_s2 in ((x, y) for x in shapes for y in shapes):
+                with create_s1() as s1:
+                    with create_s2() as s2:
+                        if maintain and (
+                            create_s1 in (create_inst_group, create_pr_inst, create_db_shape)
+                            or create_s2 in (create_inst_group, create_pr_inst, create_db_shape)
+                        ):
+                            with pytest.raises(ValueError):
+                                s1.align.align(
+                                    **{handle1: getattr(s2.align, handle2)}, maintain=maintain
+                                )
+                        else:
+                            s1.align.align(
+                                **{handle1: getattr(s2.align, handle2)}, maintain=maintain
+                            )
+                            # Actual bounding box of moved s1
+                            # (as Rect to simplify comparision with expected position)
+                            new_rect = Rect[
+                                s1.b_box[0][0] : s1.b_box[1][0], s1.b_box[0][1] : s1.b_box[1][1]
+                            ]
+                            assert getattr(new_rect, handle1) == getattr(s2.rect, handle2)
