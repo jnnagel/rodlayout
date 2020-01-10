@@ -41,6 +41,8 @@ class _AlignHandle:
     def _do_align(
         self, align_handle: str, ref: '_AlignHandle', sep: TupleVector, maintain: bool
     ) -> 'FigureCollection':
+        if maintain:
+            raise ValueError("Cannot maintain alignment when figure has no rod representation.")
         cell_view = self._shape.cell_view
         with ghost_shape(cell_view, self._shape, self._pr) as align_rod:
             with ghost_shape(cell_view, ref._shape, ref._pr) as ref_rod:
