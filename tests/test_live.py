@@ -275,8 +275,7 @@ def test_align(ws, cv, cell_cv):
 
     @contextmanager
     def create_inst_group():
-        with create_inst() as inst:
-            with create_inst() as ref_inst:
+        with create_inst() as inst, create_inst() as ref_inst:
                 shape = inst.shape.b_box.align(center_left=ref_inst.shape.b_box.center_right)
                 b_box = shape.skill_b_box
                 yield Alignable(
@@ -316,23 +315,22 @@ def test_align(ws, cv, cell_cv):
     for maintain in (True, False):
         for handle1, handle2 in ((x, y) for x in handles for y in handles):
             for create_s1, create_s2 in ((x, y) for x in shapes for y in shapes):
-                with create_s1() as s1:
-                    with create_s2() as s2:
-                        if maintain and (
-                            create_s1 in (create_inst_group, create_pr_inst, create_db_shape)
-                            or create_s2 in (create_inst_group, create_pr_inst, create_db_shape)
-                        ):
-                            with pytest.raises(ValueError):
-                                s1.align.align(
-                                    **{handle1: getattr(s2.align, handle2)}, maintain=maintain
-                                )
-                        else:
+                with create_s1() as s1, create_s2() as s2:
+                    if maintain and (
+                        create_s1 in (create_inst_group, create_pr_inst, create_db_shape)
+                        or create_s2 in (create_inst_group, create_pr_inst, create_db_shape)
+                    ):
+                        with pytest.raises(ValueError):
                             s1.align.align(
                                 **{handle1: getattr(s2.align, handle2)}, maintain=maintain
                             )
-                            # Actual bounding box of moved s1
-                            # (as Rect to simplify comparision with expected position)
-                            new_rect = Rect[
-                                s1.b_box[0][0] : s1.b_box[1][0], s1.b_box[0][1] : s1.b_box[1][1]
-                            ]
-                            assert getattr(new_rect, handle1) == getattr(s2.rect, handle2)
+                    else:
+                        s1.align.align(
+                            **{handle1: getattr(s2.align, handle2)}, maintain=maintain
+                        )
+                        # Actual bounding box of moved s1
+                        # (as Rect to simplify comparision with expected position)
+                        new_rect = Rect[
+                            s1.b_box[0][0] : s1.b_box[1][0], s1.b_box[0][1] : s1.b_box[1][1]
+                        ]
+                        assert getattr(new_rect, handle1) == getattr(s2.rect, handle2)
