@@ -275,9 +275,9 @@ def test_align(ws, cv, cell_cv):
 
     @contextmanager
     def create_inst_group():
-        with create_inst() as i1:
-            with create_inst() as i2:
-                shape = i1.shape.b_box.align(center_left=i2.shape.b_box.center_right)
+        with create_inst() as inst:
+            with create_inst() as ref_inst:
+                shape = inst.shape.b_box.align(center_left=ref_inst.shape.b_box.center_right)
                 b_box = shape.skill_b_box
                 yield Alignable(
                     shape=shape,
