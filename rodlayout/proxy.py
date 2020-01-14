@@ -20,6 +20,12 @@ TupleVector = TuplePoint
 
 @dataclass(frozen=True)
 class _AlignHandle:
+    """
+    This handle is used for syntactically pretty alignment.
+    The alignment is possible on the bounding box of the figure and,
+    if allowed, on the P&R boundary of the instance.
+    """
+
     _shape: 'Figure'
     _pr: bool
     _handle: str
@@ -61,6 +67,11 @@ class _AlignHandle:
 
 @dataclass(frozen=True)
 class _RodAlignHandle(_AlignHandle):
+    """
+    The rod align handle ties to align without usage of the ghost_shape trick.
+    This is possible if aligned on bounding boxes and no figure collection is involved.
+    """
+
     def _do_align(
         self, align_handle: str, ref: '_AlignHandle', sep: TupleVector, maintain: bool
     ) -> 'FigureCollection':
@@ -111,11 +122,16 @@ class Figure:
 
     @property
     def b_box(self) -> _AlignHandle:
+        """
+        May be used to align on the bounding box of this figure.
+        :return: AlignHandle for the bounding box.
+        """
         return _AlignHandle(self, False, '')
 
     @property
     def skill_b_box(self) -> BoundingBox:
         """
+        This bounding box is obtained by issuing the b_box skill command for this figure.
         :return: Bounding box for this figure.
         """
         raise NotImplementedError
@@ -123,7 +139,8 @@ class Figure:
     @property
     def skill_pr_boundary(self) -> BoundingBox:
         """
-
+        Only implemented for Figures which possess a pr boundary.
+        :return: The bounding box for the pr boundary if existent.
         """
         raise NotImplementedError
 
@@ -405,6 +422,10 @@ class Instance(RodShape):
 
     @property
     def pr_boundary(self) -> _AlignHandle:
+        """
+        May be used to align on the P&R boundary of this instance.
+        :return: AlignHandle for the pr boundary.
+        """
         return _AlignHandle(self, True, '')
 
     @property
