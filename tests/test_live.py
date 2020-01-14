@@ -257,7 +257,7 @@ def test_align(ws, cv, cell_cv):
 
     @contextmanager
     def create_inst():
-        nonlocal count, ws, cv, cell_cv
+        nonlocal count
         name = f"I{count}_test"
         db = ws.db.create_inst(cv, cell_cv, name, (0, 0), "R0")
         count += 1
@@ -287,7 +287,6 @@ def test_align(ws, cv, cell_cv):
 
     @contextmanager
     def create_db_shape():
-        nonlocal cv
         canvas = Canvas(cv)
         rect = Rect[0:1, 3:7, dummy_layer]
         group = Group([rect])
@@ -301,7 +300,6 @@ def test_align(ws, cv, cell_cv):
 
     @contextmanager
     def create_rod_shape():
-        nonlocal ws, cv
         b_box = ((-3, -5), (13, 17))
         rod = ws.rod.create_rect(cv_id=cv, layer=dummy_layer, b_box=b_box)
         shape = RodShape.from_rod(cast(RemoteObject, rod))
