@@ -303,6 +303,9 @@ class DbShape(Figure, CanTranslate):
 
     @property
     def _bbox(self) -> Rect:
+        """
+        :return: Rectangle matching the bounding box of the shape.
+        """
         (left, bottom), (right, top) = self.db.b_box
         return Rect.from_edges(left, right, bottom, top)
 
