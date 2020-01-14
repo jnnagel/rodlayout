@@ -274,13 +274,13 @@ def create_pr_inst(skill):
 @contextmanager
 def create_inst_group(skill):
     with create_inst(skill) as inst, create_inst(skill) as ref_inst:
-            shape = inst.shape.b_box.align(center_left=ref_inst.shape.b_box.center_right)
-            b_box = shape.skill_b_box
-            yield Alignable(
-                shape=shape,
-                align_at="b_box",
-                rect=Rect[b_box[0][0] : b_box[1][0], b_box[0][1] : b_box[1][1]],
-            )
+        shape = inst.shape.b_box.align(center_left=ref_inst.shape.b_box.center_right)
+        b_box = shape.skill_b_box
+        yield Alignable(
+            shape=shape,
+            align_at="b_box",
+            rect=Rect[b_box[0][0] : b_box[1][0], b_box[0][1] : b_box[1][1]],
+        )
 
 
 @contextmanager
@@ -335,9 +335,7 @@ def test_align(ws, cv, cell_cv, create_shape, create_ref_shape, handle, ref_hand
                     **{handle: getattr(ref_shape.align, ref_handle)}, maintain=maintain
                 )
         else:
-            shape.align.align(
-                **{handle: getattr(ref_shape.align, ref_handle)}, maintain=maintain
-            )
+            shape.align.align(**{handle: getattr(ref_shape.align, ref_handle)}, maintain=maintain)
             # Actual bounding box of moved s1
             # (as Rect to simplify comparision with expected position)
             new_rect = Rect[
