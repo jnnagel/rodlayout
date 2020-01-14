@@ -68,7 +68,7 @@ class _AlignHandle:
 @dataclass(frozen=True)
 class _RodAlignHandle(_AlignHandle):
     """
-    The rod align handle ties to align without usage of the ghost_shape trick.
+    The rod align handle tries to align without usage of the ghost_shape trick.
     This is possible if aligned on bounding boxes and no figure collection is involved.
     """
 
