@@ -62,7 +62,7 @@ class _AlignHandle:
                     x_sep=sep[0],
                     y_sep=sep[1],
                 )
-        return FigureCollection([self._shape, ref._shape], cell_view)
+        return FigureCollection([self._shape, ref._shape])
 
 
 @dataclass(frozen=True)
@@ -99,7 +99,7 @@ class _RodAlignHandle(_AlignHandle):
             x_sep=sep[0],
             y_sep=sep[1],
         )
-        return FigureCollection([self._shape, ref._shape], self._shape.cell_view)
+        return FigureCollection([self._shape, ref._shape])
 
 
 class Figure:
@@ -164,11 +164,17 @@ class FigureCollection(Figure):
     """
 
     elements: List[Figure]
-    _cell_view: RemoteObject
 
     @property
     def cell_view(self) -> RemoteObject:
-        return self._cell_view
+        """
+        All elements must be present in the same cell view.
+        """
+
+        elements_cv = [e.cell_view for e in self.elements]
+        assert elements_cv.count(elements_cv[0]) == len(elements_cv), \
+            "All elements of the figure collection must be present in the same cell view."
+        return elements_cv[0]
 
     @property
     def skill_b_box(self) -> BoundingBox:
