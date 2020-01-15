@@ -336,7 +336,5 @@ def test_align(ws, cv, cell_cv, create_shape, create_ref_shape, handle, ref_hand
                 )
         else:
             shape.align.align(**{handle: getattr(ref_shape.align, ref_handle)}, maintain=maintain)
-            # Actual bounding box of moved s1
-            # (as Rect to simplify comparision with expected position)
             new_rect = b_box_to_rect(shape.b_box)
             assert getattr(new_rect, handle) == getattr(ref_shape.rect, ref_handle)
