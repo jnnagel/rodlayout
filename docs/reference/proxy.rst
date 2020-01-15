@@ -2,6 +2,9 @@ Proxies
 =======
 
 
+.. autoclass:: rodlayout.proxy._AlignHandle
+    :members:
+
 .. autoclass:: rodlayout.proxy.Figure
     :members:
 

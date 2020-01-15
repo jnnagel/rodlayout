@@ -22,8 +22,8 @@ TupleVector = TuplePoint
 class _AlignHandle:
     """
     This handle is used for syntactically pretty alignment.
-    The alignment is possible on the bounding box of the figure and,
-    if allowed, on the P&R boundary of the instance.
+    The alignment is possible on the bounding box of the figure and
+    on the P&R boundary of the instance (if allowed).
     """
 
     _shape: 'Figure'
@@ -36,6 +36,13 @@ class _AlignHandle:
     def align(
         self, sep: TupleVector = (0, 0), maintain: bool = False, **handle: '_AlignHandle'
     ) -> 'FigureCollection':
+        """
+        Aligns this figure on a reference figure:
+
+        >>> instance.pr_boundary.align(center_left=ref_figure.b_box.center_right)
+
+        Returns a figure collection containing all shapes involved in the alignment.
+        """
         assert len(handle) == 1, "Exactly 1 align handle expected."
         key, ref = handle.popitem()
         assert ref._handle, "Need a handle name for the reference object."
@@ -113,7 +120,6 @@ class Figure:
     def cell_view(self) -> RemoteObject:
         """
         Each figure exists in one specific cell view.
-        :return: Cell view of this figure.
         """
         raise NotImplementedError
 
@@ -124,15 +130,13 @@ class Figure:
     def b_box(self) -> _AlignHandle:
         """
         May be used to align on the bounding box of this figure.
-        :return: AlignHandle for the bounding box.
         """
         return _AlignHandle(self, False, '')
 
     @property
     def skill_b_box(self) -> BoundingBox:
         """
-        This bounding box is obtained by issuing the b_box skill command for this figure.
-        :return: Bounding box for this figure.
+        This bounding box is queried via skill.
         """
         raise NotImplementedError
 
@@ -140,13 +144,13 @@ class Figure:
     def skill_pr_boundary(self) -> BoundingBox:
         """
         Only implemented for Figures which possess a pr boundary.
-        :return: The bounding box for the pr boundary if existent.
+        The bounding box for the pr boundary is queried via skill.
         """
         raise NotImplementedError
 
     def get_db_ids(self) -> Iterable[RemoteObject]:
         """
-        :return: Flat list of all database instance ids contained in this figure.
+        Returns a flat list of all database instance ids contained in this figure.
         """
         raise NotImplementedError
 
@@ -172,15 +176,16 @@ class FigureCollection(Figure):
         """
 
         elements_cv = [e.cell_view for e in self.elements]
-        assert elements_cv.count(elements_cv[0]) == len(elements_cv), \
-            "All elements of the figure collection must be present in the same cell view."
+        assert elements_cv.count(elements_cv[0]) == len(
+            elements_cv
+        ), "All elements of the figure collection must be present in the same cell view."
         return elements_cv[0]
 
     @property
     def skill_b_box(self) -> BoundingBox:
         """
-        :return: Bounding box drawn by all instances contained in this group.
-                 Determined by b_box value of figure group.
+        Bounding box drawn by all instances contained in this group.
+        Queried via skill and determined by b_box value of the figure group.
         """
         group_id = current_workspace.db.create_fig_group(
             self.cell_view, None, False, cast(SkillTuple, (0, 0)), Transform.identity.value,
@@ -193,11 +198,14 @@ class FigureCollection(Figure):
 
     @property
     def skill_pr_boundary(self) -> BoundingBox:
+        """
+        A figure collection does not possess a P&R boundary.
+        """
         raise NotImplementedError("Figure collection does not have a pr boundary.")
 
     def get_db_ids(self) -> Generator[RemoteObject, None, None]:
         """
-        :return: All database ids contained in ``elements``.
+        Returns all database ids contained in ``elements``.
         """
         for element in self.elements:
             yield from element.get_db_ids()
@@ -216,14 +224,23 @@ class DbShape(Figure, CanTranslate):
 
     @property
     def skill_b_box(self) -> BoundingBox:
+        """
+        This bounding box is queried via skill.
+        """
         return cast(BoundingBox, self.db.b_box)
 
     @property
     def skill_pr_boundary(self) -> BoundingBox:
+        """
+        Not every ``DbShape`` has a P&R boundary.
+        """
         raise NotImplementedError("Db Shape does not have a pr boundary.")
 
     @property
     def cell_view(self) -> RemoteObject:
+        """
+        Each figure exists in one specific cell view.
+        """
         return cast(RemoteObject, self.db.cell_view)
 
     def __str__(self) -> str:
@@ -310,7 +327,7 @@ class DbShape(Figure, CanTranslate):
     @property
     def _bbox(self) -> Rect:
         """
-        :return: Rectangle matching the bounding box of the shape.
+        Rectangle matching the bounding box of the shape.
         """
         (left, bottom), (right, top) = self.db.b_box
         return Rect.from_edges(left, right, bottom, top)
@@ -377,7 +394,7 @@ class DbShape(Figure, CanTranslate):
 
     def get_db_ids(self) -> List[RemoteObject]:
         """
-        :return: Database id for this shape.
+        Returns the database id for this shape as only entry in a list.
         """
         return [self.db]
 
@@ -399,10 +416,21 @@ class RodShape(DbShape):
 
     @property
     def skill_pr_boundary(self) -> BoundingBox:
+        """
+        Not every ``RodShape`` has a P&R boundary.
+        """
         raise NotImplementedError("Rod Shape has no pr boundary.")
 
     @property
     def b_box(self) -> _RodAlignHandle:
+        """
+        May be used to align on the bounding box of this figure.
+
+        The ``_RodAlignHandle`` enables a maintainable alignment,
+        if both figures involved use it.
+
+        >>> rod_shape.b_box.align(top_left=ref_rod_shape.b_box.top_right, maintain=True)
+        """
         return _RodAlignHandle(self, False, '')
 
     @classmethod
@@ -432,6 +460,11 @@ class Instance(RodShape):
 
     @classmethod
     def from_name(cls, cell_view: RemoteObject, name: str) -> 'Instance':
+        """
+        Factory to get ``Instance`` by cell view and name.
+
+        >>> inst = Instance.from_name(cv, "I0")
+        """
         db = cast(RemoteObject, current_workspace.db.find_any_inst_by_name(cell_view, name))
         assert db is not None
         rod = cast(RemoteObject, current_workspace.rod.get_obj(db))
@@ -443,12 +476,16 @@ class Instance(RodShape):
     def pr_boundary(self) -> _AlignHandle:
         """
         May be used to align on the P&R boundary of this instance.
-        :return: AlignHandle for the pr boundary.
+
+        >>> inst.pr_boundary.align(bottom_center=ref_inst.pr_boundary.top_center)
         """
         return _AlignHandle(self, True, '')
 
     @property
     def skill_pr_boundary(self) -> BoundingBox:
+        """
+        Absolute position of the P&R boundary in the current cell view as ``BoundingBox``.
+        """
         cv_rel_pr_box = self.db.master.pr_boundary.b_box
 
         inst_rel_pr_box = [
