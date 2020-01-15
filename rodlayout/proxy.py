@@ -458,9 +458,6 @@ class Instance(RodShape):
 
         return cast(BoundingBox, abs_pr_box)
 
-    def get_db_ids(self) -> List[RemoteObject]:
-        return [self.db]
-
 
 @contextmanager
 def ghost_shape(
