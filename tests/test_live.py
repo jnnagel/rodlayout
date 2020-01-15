@@ -105,6 +105,11 @@ def to_rect(r):
     return Rect.from_edges(l, right, b, t, layer_of(r))
 
 
+def b_box_to_rect(b_box):
+    (left, bottom), (right, top) = b_box
+    return Rect.from_edges(left, right, bottom, top)
+
+
 def nearly_equal(x, y):
     if isinstance(x, (list, tuple)):
         return all(nearly_equal(xx, yy) for xx, yy in zip(x, y))
@@ -275,11 +280,8 @@ def create_pr_inst(skill):
 def create_inst_group(skill):
     with create_inst(skill) as inst, create_inst(skill) as ref_inst:
         shape = inst.shape.b_box.align(center_left=ref_inst.shape.b_box.center_right)
-        b_box = shape.skill_b_box
         yield Alignable(
-            shape=shape,
-            align_at="b_box",
-            rect=Rect[b_box[0][0] : b_box[1][0], b_box[0][1] : b_box[1][1]],
+            shape=shape, align_at="b_box", rect=b_box_to_rect(shape.skill_b_box),
         )
 
 
@@ -303,9 +305,7 @@ def create_rod_shape(skill):
     rod = skill["ws"].rod.create_rect(cv_id=skill["cv"], layer=dummy_layer, b_box=b_box)
     shape = RodShape.from_rod(cast(RemoteObject, rod))
     yield Alignable(
-        shape=shape,
-        align_at="b_box",
-        rect=Rect[b_box[0][0] : b_box[1][0], b_box[0][1] : b_box[1][1]],
+        shape=shape, align_at="b_box", rect=b_box_to_rect(b_box),
     )
     shape.delete()
 
@@ -338,7 +338,5 @@ def test_align(ws, cv, cell_cv, create_shape, create_ref_shape, handle, ref_hand
             shape.align.align(**{handle: getattr(ref_shape.align, ref_handle)}, maintain=maintain)
             # Actual bounding box of moved s1
             # (as Rect to simplify comparision with expected position)
-            new_rect = Rect[
-                shape.b_box[0][0] : shape.b_box[1][0], shape.b_box[0][1] : shape.b_box[1][1]
-            ]
+            new_rect = b_box_to_rect(shape.b_box)
             assert getattr(new_rect, handle) == getattr(ref_shape.rect, ref_handle)
